@@ -2,6 +2,8 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <setjmp.h>
+#include <stdio.h>
 
 /* You can support more threads. At least support this many. */
 #define MAX_THREADS 128
@@ -26,6 +28,8 @@
 
 /* thread_status identifies the current state of a thread. You can add, rename,
  * or delete these values. This is only a suggestion. */
+
+
 enum thread_status
 {
 	TS_EXITED,
@@ -37,18 +41,41 @@ enum thread_status
  * need one of this per thread.
  */
 struct thread_control_block {
-	/* TODO: add a thread ID */
-	/* TODO: add information about its stack */
-	/* TODO: add information about its registers */
-	/* TODO: add information about the status (e.g., use enum thread_status) */
-	/* Add other information you need to manage this thread */
+	pthread_t thread_ID;	/* TODO: add a thread ID */
+	long *end_ptr;    /* TODO: add information about its stack */
+	jmp_buf thread_buffer; /* TODO: add information about its registers */
+	enum thread_status TS;	/* TODO: add information about the status (e.g., use enum thread_status) */
+	struct thread_control_block *next;	/* Add other information you need to manage this thread */
 };
+
+static struct thread_control_block *run_queue;
+static struct thread_control_block *last_thread;
 
 // to supress compiler error
 static void schedule(int signal) __attribute__((unused));
 
 static void schedule(int signal)
 {
+	if (run_queue->TS = TS_RUNNING) {
+			int val = setjmp(run_queue->thread_buffer);
+		if (val != 0) {
+			perror("ERROR: Thread %lu state could not be saved");
+		}
+		run_queue->TS = TS_READY;
+		run_queue = run_queue->next;
+
+	last_thread = last_thread->next;
+	longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
+
+	} else if (run_queue->TS = TS_EXITED) {
+		pthread_exit(); // Just in case the interrupt occurred in the point after status was changed.
+
+	} else if (run_queue->TS = TS_READY) {
+		longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
+	} else
+
+
+
 	/* TODO: implement your round-robin scheduler 
 	 * 1. Use setjmp() to update your currently-active thread's jmp_buf
 	 *    You DON'T need to manually modify registers here.
@@ -59,6 +86,26 @@ static void schedule(int signal)
 
 static void scheduler_init()
 {
+	// Choose between linked list and circular array
+
+	struct thread_control_block * main_TCB = calloc(sizeof(struct thread_control_block), sizeof(struct thread_control_block));
+	int val = setjmp(main_TCB->thread_buffer);
+
+	if(val != 0) {
+		perror("ERROR: Could not create main thread");
+	}
+	
+	main_TCB->thread_ID = 0;
+	main_TCB->TS = TS_RUNNING;
+	main_TCB->next = main_TCB;
+	run_queue = main_TCB;
+	last_thread = main_TCB;
+
+	// MAKE SIGNAL HANDLER
+
+
+
+
 	/* TODO: do everything that is needed to initialize your scheduler. For example:
 	 * - Allocate/initialize global threading data structures
 	 * - Create a TCB for the main thread. Note: This is less complicated
@@ -80,6 +127,28 @@ int pthread_create(
 		is_first_call = false;
 		scheduler_init();
 	}
+
+	struct thread_control_block *new_TCB = calloc(sizeof(struct thread_control_block), sizeof(struct thread_control_block));
+	long *end_ptr = malloc(sizeof(THREAD_STACK_SIZE));
+	long *stack_pointer = end_ptr + THREAD_STACK_SIZE - 1; // 1 because it is a long
+	stack_pointer = (long *) pthread_exit;
+
+	new_TCB->thread_ID = *thread;
+	new_TCB->end_ptr = end_ptr;
+
+	new_TCB->thread_buffer->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long int) stack_pointer);
+	new_TCB->thread_buffer->__jmpbuf[JB_PC]  = ptr_mangle((unsigned long int) start_thunk);
+	new_TCB->thread_buffer->__jmpbuf[JB_R12] = (unsigned long int)start_routine;
+	new_TCB->thread_buffer->__jmpbuf[JB_R13] = (unsigned long int)arg;
+
+	new_TCB->TS = TS_READY;
+
+	last_thread->next = new_TCB;
+	new_TCB->next = run_queue;
+	last_thread = new_TCB;
+	// Attach to run queue
+
+	schedule();
 
 	/* TODO: Return 0 on successful thread creation, non-zero for an error.
 	 *       Be sure to set *thread on success.
@@ -126,6 +195,15 @@ int pthread_create(
 
 void pthread_exit(void *value_ptr)
 {
+	run_queue->TS = TS_EXITED;
+	free(run_queue->end_ptr);
+
+	run_queue = run_queue->next;
+	free(last_thread->next);
+	last_thread->next = run_queue;
+
+	schedule();
+
 	/* TODO: Exit the current thread instead of exiting the entire process.
 	 * Hints:
 	 * - Release all resources for the current thread. CAREFUL though.
@@ -134,7 +212,7 @@ void pthread_exit(void *value_ptr)
 	 *   can happen.
 	 * - Update the thread's status to indicate that it has exited
 	 */
-	exit(1);
+	
 }
 
 pthread_t pthread_self(void)
@@ -151,3 +229,7 @@ pthread_t pthread_self(void)
  * want to run the functions in this file, create separate test programs
  * that have their own main functions.
  */
+// int main() {
+// 	// Just to test compilation
+// 	return 0;
+// }
