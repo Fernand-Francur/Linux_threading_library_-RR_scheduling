@@ -56,24 +56,52 @@ static void schedule(int signal) __attribute__((unused));
 
 static void schedule(int signal)
 {
-	if (run_queue->TS = TS_RUNNING) {
+
+	/* signal values:
+		 1 : new thread created
+		 2 : thread exited
+		 3 : alarm triggered */
+
+	switch(run_queue->TS) {
+		case TS_RUNNING: ;
+
 			int val = setjmp(run_queue->thread_buffer);
-		if (val != 0) {
-			perror("ERROR: Thread %lu state could not be saved");
-		}
-		run_queue->TS = TS_READY;
-		run_queue = run_queue->next;
+			if (val != 0) {
+				char errorString[100];
+				snprintf(errorString, sizeof(errorString), "ERROR: State could not be saved of thread %lu", run_queue->thread_ID);
+				perror(errorString);
+			}
+			run_queue->TS = TS_READY;
+			run_queue = run_queue->next;
 
-	last_thread = last_thread->next;
-	longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
+			last_thread = last_thread->next;
+			longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
+		case TS_EXITED:
+			pthread_exit((void *) run_queue->thread_ID);
+		case TS_READY:
+			longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
+		default:
+			perror("ERROR: Thread state could not be defined");
+	}
 
-	} else if (run_queue->TS = TS_EXITED) {
-		pthread_exit(); // Just in case the interrupt occurred in the point after status was changed.
+	// FIRST ATTEMPT IF STATEMENT //
+	// if (run_queue->TS = TS_RUNNING) {
+	// 		int val = setjmp(run_queue->thread_buffer);
+	// 	if (val != 0) {
+	// 		perror("ERROR: Thread %lu state could not be saved");
+	// 	}
+	// 	run_queue->TS = TS_READY;
+	// 	run_queue = run_queue->next;
 
-	} else if (run_queue->TS = TS_READY) {
-		longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
-	} else
+	// last_thread = last_thread->next;
+	// longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
 
+	// } else if (run_queue->TS = TS_EXITED) {
+	// 	pthread_exit(); // Just in case the interrupt occurred in the point after status was changed.
+
+	// } else if (run_queue->TS = TS_READY) {
+	// 	longjmp(run_queue->thread_buffer, (int) run_queue->thread_ID);
+	// } else {perror("ERROR: Thread state could not be defined");}
 
 
 	/* TODO: implement your round-robin scheduler 
@@ -148,7 +176,7 @@ int pthread_create(
 	last_thread = new_TCB;
 	// Attach to run queue
 
-	schedule();
+	schedule(1);
 
 	/* TODO: Return 0 on successful thread creation, non-zero for an error.
 	 *       Be sure to set *thread on success.
@@ -202,7 +230,7 @@ void pthread_exit(void *value_ptr)
 	free(last_thread->next);
 	last_thread->next = run_queue;
 
-	schedule();
+	schedule(2);
 
 	/* TODO: Exit the current thread instead of exiting the entire process.
 	 * Hints:
@@ -212,7 +240,7 @@ void pthread_exit(void *value_ptr)
 	 *   can happen.
 	 * - Update the thread's status to indicate that it has exited
 	 */
-	
+	exit(1);
 }
 
 pthread_t pthread_self(void)
