@@ -5,11 +5,16 @@
 #include <setjmp.h>
 #include <stdio.h>
 
+/* Signal statuses */
+#define THREAD_CREATED 1
+#define THREAD_EXITED 2
+#define ALARM_TRIGGERED 3
+
 /* You can support more threads. At least support this many. */
 #define MAX_THREADS 128
 
 /* Your stack should be this many bytes in size */
-#define THREAD_STACK_SIZE 32767
+#define THREAD_STACK_SIZE 32768
 
 /* Number of microseconds between scheduling events */
 #define SCHEDULER_INTERVAL_USECS (50 * 1000)
@@ -29,7 +34,6 @@
 /* thread_status identifies the current state of a thread. You can add, rename,
  * or delete these values. This is only a suggestion. */
 
-
 enum thread_status
 {
 	TS_EXITED,
@@ -42,7 +46,7 @@ enum thread_status
  */
 struct thread_control_block {
 	pthread_t thread_ID;	/* TODO: add a thread ID */
-	long *end_ptr;    /* TODO: add information about its stack */
+	char *end_ptr;    /* TODO: add information about its stack */
 	jmp_buf thread_buffer; /* TODO: add information about its registers */
 	enum thread_status TS;	/* TODO: add information about the status (e.g., use enum thread_status) */
 	struct thread_control_block *next;	/* Add other information you need to manage this thread */
@@ -50,6 +54,11 @@ struct thread_control_block {
 
 static struct thread_control_block *run_queue;
 static struct thread_control_block *last_thread;
+
+// void sigchlHandler(int sig) {
+
+
+// }
 
 // to supress compiler error
 static void schedule(int signal) __attribute__((unused));
@@ -67,9 +76,7 @@ static void schedule(int signal)
 
 			int val = setjmp(run_queue->thread_buffer);
 			if (val != 0) {
-				char errorString[100];
-				snprintf(errorString, sizeof(errorString), "ERROR: State could not be saved of thread %lu", run_queue->thread_ID);
-				perror(errorString);
+				break;
 			}
 			run_queue->TS = TS_READY;
 			run_queue = run_queue->next;
@@ -112,18 +119,18 @@ static void schedule(int signal)
 	 */
 }
 
-static void scheduler_init()
+static int scheduler_init()
 {
 	// Choose between linked list and circular array
 
-	struct thread_control_block * main_TCB = calloc(sizeof(struct thread_control_block), sizeof(struct thread_control_block));
+	struct thread_control_block * main_TCB = malloc(sizeof(struct thread_control_block));
 	int val = setjmp(main_TCB->thread_buffer);
 
 	if(val != 0) {
-		perror("ERROR: Could not create main thread");
+		return 1;
 	}
 	
-	main_TCB->thread_ID = 0;
+	main_TCB->thread_ID = 1;
 	main_TCB->TS = TS_RUNNING;
 	main_TCB->next = main_TCB;
 	run_queue = main_TCB;
@@ -131,6 +138,13 @@ static void scheduler_init()
 
 	// MAKE SIGNAL HANDLER
 
+    // struct sigaction sa;
+    // sigemptyset(&sa.sa_mask);
+    // sa.sa_flags = SA_NODEFER;
+    // sa.sa_handler = sigalrmHandler;      // address of handler function
+
+    // if(sigaction(SIGALRM, &sa, NULL) == -1)
+    //    perror("ERROR: sigaction failure");
 
 
 
@@ -141,7 +155,16 @@ static void scheduler_init()
 	 *   current stack and registers are already exactly what they need to be!
 	 *   Just make sure they are correctly referenced in your TCB.
 	 * - Set up your timers to call schedule() at a 50 ms interval (SCHEDULER_INTERVAL_USECS)
+
+
+
+		0x555555559480
+
+		0x555555561477
+
+
 	 */
+	return 0;
 }
 
 int pthread_create(
@@ -153,22 +176,31 @@ int pthread_create(
 	if (is_first_call)
 	{
 		is_first_call = false;
-		scheduler_init();
+		int jumped = scheduler_init();
+		if(jumped == 1) {
+			return 1;
+		}
+
 	}
 
-	struct thread_control_block *new_TCB = calloc(sizeof(struct thread_control_block), sizeof(struct thread_control_block));
-	long *end_ptr = malloc(sizeof(THREAD_STACK_SIZE));
-	long *stack_pointer = end_ptr + THREAD_STACK_SIZE - 1; // 1 because it is a long
-	stack_pointer = (long *) pthread_exit;
+	struct thread_control_block *new_TCB = malloc(sizeof(struct thread_control_block));
+	char *end_ptr = malloc(sizeof(THREAD_STACK_SIZE));
+	char *stack_pointer = end_ptr + THREAD_STACK_SIZE - 8; // 1 because it is a long
+	stack_pointer = (char *) pthread_exit;
 
 	new_TCB->thread_ID = *thread;
 	new_TCB->end_ptr = end_ptr;
-
+  
 	new_TCB->thread_buffer->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long int) stack_pointer);
 	new_TCB->thread_buffer->__jmpbuf[JB_PC]  = ptr_mangle((unsigned long int) start_thunk);
 	new_TCB->thread_buffer->__jmpbuf[JB_R12] = (unsigned long int)start_routine;
 	new_TCB->thread_buffer->__jmpbuf[JB_R13] = (unsigned long int)arg;
-
+	/*
+	new_TCB->thread_buffer->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long int) stack_pointer);
+	new_TCB->thread_buffer->__jmpbuf[JB_PC]  = ptr_mangle((unsigned long int) start_routine);
+	new_TCB->thread_buffer->__jmpbuf[JB_R12] = (unsigned long int)start_routine;
+	new_TCB->thread_buffer->__jmpbuf[JB_R13] = (unsigned long int)arg;
+  */
 	new_TCB->TS = TS_READY;
 
 	last_thread->next = new_TCB;
@@ -176,7 +208,7 @@ int pthread_create(
 	last_thread = new_TCB;
 	// Attach to run queue
 
-	schedule(1);
+	schedule(THREAD_CREATED);
 
 	/* TODO: Return 0 on successful thread creation, non-zero for an error.
 	 *       Be sure to set *thread on success.
@@ -230,7 +262,7 @@ void pthread_exit(void *value_ptr)
 	free(last_thread->next);
 	last_thread->next = run_queue;
 
-	schedule(2);
+	schedule(THREAD_EXITED);
 
 	/* TODO: Exit the current thread instead of exiting the entire process.
 	 * Hints:
@@ -245,6 +277,7 @@ void pthread_exit(void *value_ptr)
 
 pthread_t pthread_self(void)
 {
+	return (run_queue->thread_ID);
 	/* TODO: Return the current thread instead of -1
 	 * Hint: this function can be implemented in one line, by returning
 	 * a specific variable instead of -1.
