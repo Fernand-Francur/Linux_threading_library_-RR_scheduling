@@ -200,6 +200,14 @@ int pthread_create(
 	new_TCB->thread_buffer->__jmpbuf[JB_PC]  = ptr_mangle((unsigned long int) start_routine);
 	new_TCB->thread_buffer->__jmpbuf[JB_R12] = (unsigned long int)start_routine;
 	new_TCB->thread_buffer->__jmpbuf[JB_R13] = (unsigned long int)arg;
+
+
+	0x00007ffff7e0b68e
+
+
+	rdx = 1782674852500390
+	0x65555555553a6
+
   */
 	new_TCB->TS = TS_READY;
 
