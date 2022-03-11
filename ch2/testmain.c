@@ -18,6 +18,7 @@ static void* my_thread(void* my_arg) {
     // Suggestion: do something that takes a long time
     return NULL; // Can return other values
 }
+
 int main() {
 //    int *Stack_Bottom;
 //    Stack_Bottom = (int *) malloc(16);

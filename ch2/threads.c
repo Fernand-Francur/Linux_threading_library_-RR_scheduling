@@ -5,6 +5,7 @@
 #include <setjmp.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <string.h>
 
 
 /* You can support more threads. At least support this many. */
@@ -130,6 +131,30 @@ void add_thread_to_queue(thread_t new_TCB) {
     last_thread = new_TCB;
 }
 
+void pthread_exit(void *value_ptr)
+{
+    printf("Thread exited\n");
+    // run_queue->TS = TS_EXITED;
+    // free(run_queue->stack_bottom);
+
+    // run_queue = run_queue->next;
+    // free(last_thread->next);
+    // last_thread->next = run_queue;
+
+    // schedule(THREAD_EXITED);
+
+    /* TODO: Exit the current thread instead of exiting the entire process.
+     * Hints:
+     * - Release all resources for the current thread. CAREFUL though.
+     *   If you free() the currently-in-use stack then do something like
+     *   call a function or add/remove variables from the stack, bad things
+     *   can happen.
+     * - Update the thread's status to indicate that it has exited
+     */
+
+    exit(1);
+}
+
 int thread_create (pthread_t *thread, const pthread_attr_t *attr,
         void *(*start_routine) (void *), void *arg) {
     thread_t new_TCB;
@@ -138,14 +163,32 @@ int thread_create (pthread_t *thread, const pthread_attr_t *attr,
 
     new_TCB = (thread_t) malloc(sizeof(TCB));
     if(new_TCB == NULL) { return ERROR_INITIALIZATION; }
-    stack_bottom = (int *) malloc(THREAD_STACK_SIZE);
-    // printf("Stack_bottom = %u\n", (int)stack_bottom);
-    stack_pointer = (int *) (stack_grows_down(&first_address))?((THREAD_STACK_SIZE + (int)stack_bottom)&(int)-16):stack_bottom;
-    // printf("Stack_pointer = %u\n", (int)stack_pointer);
-    // printf("Adjusted stack_pointer = %u\n", (int)stack_pointer & ((int)-16));
+    stack_bottom = (long*) calloc(THREAD_STACK_SIZE, 1);
+    stack_pointer = (long *) (stack_grows_down(&first_address))?((THREAD_STACK_SIZE + (long)stack_bottom)&(long)-16):stack_bottom;
+    
+    printf("Stack_bottom = %u\n", (long)stack_bottom);
+    printf("Stack_pointer = %u\n", (long)stack_pointer);
+    printf("Adjusted stack_pointer = %u\n", (int)stack_pointer & ((int)-16));
+    printf("stack - bottom = %u\n", (int)stack_pointer - (int)stack_bottom);
+    printf("size of pthread_exit = %u\n", (int)sizeof((unsigned long int)pthread_exit));
+    printf("size of stack_pointer = %u\n", (int)sizeof(stack_pointer));
+    long* dest = stack_pointer+64;
+    printf("stack - bottom = %u\n", (int)dest - (int)stack_bottom);
     if (setjmp(new_TCB->Environment) == 0) {
         // thread_init(new_TCB, stack_bottom);
-        *stack_bottom = (unsigned long int) thread_exit;
+        printf("thread exit = %u, &thread_exit = %u\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
+        // *stack_pointer = &thread_exit;
+        printf("*dest = %u\n", *dest);
+        printf("dest = %u\n", (unsigned long int) dest);
+        *dest =  (unsigned long int) pthread_exit;
+        printf("*dest = %u\n", *dest);
+        printf("dest = %u\n",(unsigned long int) dest);
+        printf("*dest - thread_exit = %u\n", *dest - (long unsigned int) pthread_exit);
+        printf("thread exit = %u, &thread_exit = %u\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
+        printf("stack - bottom = %u\n", (int)dest - (int)stack_bottom);
+        printf("dest size = %u, *dest size = %u\n", sizeof(dest), sizeof(*dest));
+        printf("memcpy worked\n");
+        // *stack_pointer = (unsigned long int) thread_exit;
         // new_TCB->Environment->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long int)stack_pointer);
         new_TCB->Environment->__jmpbuf[JB_PC] = ptr_mangle((unsigned long int)start_thunk);
         new_TCB->Environment->__jmpbuf[JB_R12] = (unsigned long int) start_routine;
@@ -291,27 +334,7 @@ int pthread_create(
     return -1;
 }
 
-void pthread_exit(void *value_ptr)
-{
-    run_queue->TS = TS_EXITED;
-    free(run_queue->stack_bottom);
 
-    run_queue = run_queue->next;
-    free(last_thread->next);
-    last_thread->next = run_queue;
-
-    schedule(THREAD_EXITED);
-    /* TODO: Exit the current thread instead of exiting the entire process.
-     * Hints:
-     * - Release all resources for the current thread. CAREFUL though.
-     *   If you free() the currently-in-use stack then do something like
-     *   call a function or add/remove variables from the stack, bad things
-     *   can happen.
-     * - Update the thread's status to indicate that it has exited
-     */
-
-    exit(1);
-}
 
 pthread_t pthread_self(void)
 {
