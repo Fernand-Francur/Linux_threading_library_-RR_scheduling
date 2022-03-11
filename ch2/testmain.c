@@ -41,6 +41,7 @@ int main() {
     // }
     // return 0;
    int val = pthread_create(5, NULL, my_thread, NULL);
+
     // Suggestion: do something that takes a long time, and test that
     // both this and the other long work get to take turns.
 //    jmp_buf env;

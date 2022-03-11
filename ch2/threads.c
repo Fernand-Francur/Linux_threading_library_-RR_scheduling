@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <setjmp.h>
+#include <stdio.h>
 #include <pthread.h>
+
 
 /* You can support more threads. At least support this many. */
 #define MAX_THREADS 128
@@ -66,12 +68,20 @@ static int linked_thread_init(void) {
     int *stack;
     run_queue = (thread_t) malloc(sizeof(TCB));
     stack = (int *) malloc(THREAD_STACK_SIZE);
-    run_queue->thread_ID = MAIN_THREAD;
-    run_queue->stack_bottom = stack;
-    run_queue->next = run_queue;
-    run_queue->TS = TS_RUNNING;
-    last_thread = run_queue;
-    return SUCCESSFUL_EXECUTION;
+    // if (setjmp(run_queue->Environment) == 0)
+     {
+        run_queue->thread_ID = MAIN_THREAD;
+        run_queue->stack_bottom = stack;
+        run_queue->next = run_queue;
+        run_queue->TS = TS_RUNNING;
+        last_thread = run_queue;
+        printf("Main thread created\n");
+        return SUCCESSFUL_EXECUTION;
+    } 
+    // else {
+    //     printf("Long jump to main tread init function\n");
+    //     return THREAD_JUMPED;
+    // }
 }
 
 static int stack_grows_down (void *first_address) {
@@ -80,6 +90,8 @@ static int stack_grows_down (void *first_address) {
 }
 
 int thread_exit (void) {
+    printf("thread_exit()\n");
+    thread_t temp;
     if(run_queue->thread_ID == MAIN_THREAD) {
         return SHOULDNOTREACHHERE;
     }
@@ -88,20 +100,25 @@ int thread_exit (void) {
     run_queue = run_queue->next;
     free(last_thread->next);
     last_thread->next = run_queue;
-
+    return SUCCESSFUL_EXECUTION;
 //    schedule(THREAD_EXITED);
 }
 
-static volatile int thread_wp(void) {
+static volatile void thread_wrapper(void) {
     (*run_queue->Entry) (run_queue->Argc, run_queue->Argv);
     thread_exit(); //TODO MAKE THREAD EXIT SEPARATE FROM PTHREADEXIT
-    return 0;
 }
 
 void thread_init (volatile TCB *volatile new_TCB, void *stack_pointer) {
-    new_TCB->Environment->__jmpbuf[JB_RSP] = (long) stack_pointer;
-    new_TCB->Environment->__jmpbuf[JB_RBP] = (long) stack_pointer;
-    new_TCB->Environment->__jmpbuf[JB_PC] = (long) ptr_mangle((unsigned long int) thread_wp);
+    // printf("Stack_pointer in thread_init = %u\n", (int)stack_pointer);
+    // new_TCB->Environment->__jmpbuf[JB_RSP] = (int) stack_pointer;
+    // new_TCB->Environment->__jmpbuf[JB_RBP] = (int) stack_pointer;
+
+    printf("Thread_wrapper address = %lu, ptr_mangle = %lu\n", 
+        (unsigned long int)thread_wrapper,
+        (long) ptr_mangle((unsigned long int)thread_wrapper));
+    new_TCB->Environment->__jmpbuf[JB_PC] = ptr_mangle((unsigned long int) thread_wrapper);
+
 //    new_TCB->Environment->__jmpbuf[JB_RSP] = (int) stack_pointer;
 //    new_TCB->Environment->__jmpbuf[JB_RBP] = (int) stack_pointer;
 //    new_TCB->Environment->__jmpbuf[JB_PC] = (int) thread_wrapper;
@@ -113,27 +130,36 @@ void add_thread_to_queue(thread_t new_TCB) {
     last_thread = new_TCB;
 }
 
-int thread_create (void (*Entry)(), int Argc, char **Argv, pthread_t *thread) {
+int thread_create (pthread_t *thread, const pthread_attr_t *attr,
+        void *(*start_routine) (void *), void *arg) {
     thread_t new_TCB;
-    long *stack_bottom;
-    int first_address;
+    long *stack_bottom, first_address;
     void *stack_pointer;
 
     new_TCB = (thread_t) malloc(sizeof(TCB));
     if(new_TCB == NULL) { return ERROR_INITIALIZATION; }
-    stack_bottom = (long *) malloc(THREAD_STACK_SIZE + STACK_ALIGNMENT);
-    stack_pointer = (void *) (stack_grows_down(&first_address))?(THREAD_STACK_SIZE + (int)stack_bottom)&(-STACK_ALIGNMENT):(int)stack_bottom;
+    stack_bottom = (int *) malloc(THREAD_STACK_SIZE);
+    // printf("Stack_bottom = %u\n", (int)stack_bottom);
+    stack_pointer = (int *) (stack_grows_down(&first_address))?((THREAD_STACK_SIZE + (int)stack_bottom)&(int)-16):stack_bottom;
+    // printf("Stack_pointer = %u\n", (int)stack_pointer);
+    // printf("Adjusted stack_pointer = %u\n", (int)stack_pointer & ((int)-16));
     if (setjmp(new_TCB->Environment) == 0) {
-        thread_init(new_TCB, stack_pointer);
-        new_TCB->thread_ID = (int) thread;
-        new_TCB->Entry = (void(*)(int, char**))Entry;
-        new_TCB->Argc = Argc;
-        new_TCB->Argv = Argv;
+        // thread_init(new_TCB, stack_bottom);
+        *stack_bottom = (unsigned long int) thread_exit;
+        // new_TCB->Environment->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long int)stack_pointer);
+        new_TCB->Environment->__jmpbuf[JB_PC] = ptr_mangle((unsigned long int)start_thunk);
+        new_TCB->Environment->__jmpbuf[JB_R12] = (unsigned long int) start_routine;
+        new_TCB->Environment->__jmpbuf[JB_R13] = (unsigned long int) arg;
+        new_TCB->thread_ID = (int*) thread;
+        new_TCB->Entry = (void(*)(int, char**))start_routine;
+        new_TCB->Argc = NULL;
+        new_TCB->Argv = arg;
         new_TCB->stack_bottom = stack_bottom;
         new_TCB->TS = TS_READY;
         add_thread_to_queue(new_TCB);
         return SUCCESSFUL_EXECUTION;
     } else {
+        printf("Thread jumped\n");
         return THREAD_JUMPED;
     }
 }
@@ -152,10 +178,13 @@ static void schedule(int signal)
             run_queue = run_queue->next;
 
             last_thread = last_thread->next;
+            run_queue->TS = TS_RUNNING;
+            printf("TS_RUNNING: Jump to thread_ID %d\n", run_queue->thread_ID);
             longjmp(run_queue->Environment, (int) run_queue->thread_ID);
         case TS_EXITED:
             pthread_exit((void *) run_queue->thread_ID);
         case TS_READY:
+            printf("TS_READY: Jump to thread_ID %d\n", run_queue->thread_ID);
             longjmp(run_queue->Environment, (int) run_queue->thread_ID);
         default:
             perror("ERROR: Thread state could not be defined");
@@ -189,25 +218,35 @@ int pthread_create(
     static bool is_first_call = true;
     int val;
     int Argc = 0;
+    int value_init = 0;
     if (is_first_call)
     {
         is_first_call = false;
-        if(linked_thread_init() != SUCCESSFUL_EXECUTION) {
-            perror("ERROR: Could not initialize main thread");
+        value_init = linked_thread_init();
+        if (value_init == SUCCESSFUL_EXECUTION) {
+            scheduler_init();
         }
-        scheduler_init();
-    }
-    if(arg != NULL) {
-        int Argc = 1;
+        // if(linked_thread_init() != SUCCESSFUL_EXECUTION) {
+        //     perror("ERROR: Could not initialize main thread");
+        // }
+        
     }
 
-    val = thread_create(start_routine, Argc, arg, thread );
-    if (val == SUCCESSFUL_EXECUTION){
-        schedule(THREAD_CREATED);
-        return 0;
-    } else {
-        return 0;
+    if (value_init != THREAD_JUMPED) {
+        if(arg != NULL) {
+            int Argc = 1;
+        }
+
+        val = thread_create(thread, attr, start_routine, arg);
+        if (val == SUCCESSFUL_EXECUTION){
+            schedule(THREAD_CREATED);
+            return 0;
+        } else {
+            return 0;
+        }
     }
+    printf("Main Thread Jumped %d\n", value_init);
+    return 0;
 
     /* TODO: Return 0 on successful thread creation, non-zero for an error.
      *       Be sure to set *thread on success.
@@ -254,6 +293,14 @@ int pthread_create(
 
 void pthread_exit(void *value_ptr)
 {
+    run_queue->TS = TS_EXITED;
+    free(run_queue->stack_bottom);
+
+    run_queue = run_queue->next;
+    free(last_thread->next);
+    last_thread->next = run_queue;
+
+    schedule(THREAD_EXITED);
     /* TODO: Exit the current thread instead of exiting the entire process.
      * Hints:
      * - Release all resources for the current thread. CAREFUL though.
@@ -262,6 +309,7 @@ void pthread_exit(void *value_ptr)
      *   can happen.
      * - Update the thread's status to indicate that it has exited
      */
+
     exit(1);
 }
 
@@ -279,3 +327,4 @@ pthread_t pthread_self(void)
  * want to run the functions in this file, create separate test programs
  * that have their own main functions.
  */
+
