@@ -16,7 +16,7 @@
 #define ALARM_TRIGGERED 3
 #define THREAD_JUMPED 4
 /* Your stack should be this many bytes in size */
-#define THREAD_STACK_SIZE 32767
+#define THREAD_STACK_SIZE 32768
 
 #define MAIN_THREAD 1
 #define SUCCESSFUL_EXECUTION 1
@@ -158,35 +158,36 @@ void pthread_exit(void *value_ptr)
 int thread_create (pthread_t *thread, const pthread_attr_t *attr,
         void *(*start_routine) (void *), void *arg) {
     thread_t new_TCB;
-    long *stack_bottom, first_address;
-    void *stack_pointer;
+    char *stack_bottom;
+    long first_address;
+    long *stack_pointer;
 
     new_TCB = (thread_t) malloc(sizeof(TCB));
     if(new_TCB == NULL) { return ERROR_INITIALIZATION; }
-    stack_bottom = (long*) calloc(THREAD_STACK_SIZE, 1);
-    stack_pointer = (long *) (stack_grows_down(&first_address))?((THREAD_STACK_SIZE + (long)stack_bottom)&(long)-16):stack_bottom;
+    stack_bottom = (char*) calloc(THREAD_STACK_SIZE, 1);
+    stack_pointer = (long *) (stack_grows_down(&first_address))?(THREAD_STACK_SIZE + stack_bottom):stack_bottom;
     
-    printf("Stack_bottom = %u\n", (long)stack_bottom);
-    printf("Stack_pointer = %u\n", (long)stack_pointer);
-    printf("Adjusted stack_pointer = %u\n", (int)stack_pointer & ((int)-16));
-    printf("stack - bottom = %u\n", (int)stack_pointer - (int)stack_bottom);
-    printf("size of pthread_exit = %u\n", (int)sizeof((unsigned long int)pthread_exit));
-    printf("size of stack_pointer = %u\n", (int)sizeof(stack_pointer));
-    long* dest = stack_pointer+64;
-    printf("stack - bottom = %u\n", (int)dest - (int)stack_bottom);
+    printf("Stack_bottom  = %x\n", (long)stack_bottom);
+    printf("Stack_pointer = %x\n", (long)stack_pointer);
+    printf("Adjusted stack_pointer = %x\n", (long)stack_pointer & ((long)-16));
+    printf("stack - bottom = %x\n", (long)stack_pointer - (long)stack_bottom);
+    printf("size of pthread_exit = %d\n", sizeof(&pthread_exit));
+    printf("size of stack_pointer = %x\n", (long)sizeof(stack_pointer));
+    long* dest = THREAD_STACK_SIZE + stack_bottom - 8;
+    printf("dest - bottom = %x\n", (long)dest - (long)stack_bottom);
     if (setjmp(new_TCB->Environment) == 0) {
         // thread_init(new_TCB, stack_bottom);
-        printf("thread exit = %u, &thread_exit = %u\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
+        printf("thread exit = %x, &thread_exit = %x\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
         // *stack_pointer = &thread_exit;
-        printf("*dest = %u\n", *dest);
-        printf("dest = %u\n", (unsigned long int) dest);
-        *dest =  (unsigned long int) pthread_exit;
-        printf("*dest = %u\n", *dest);
-        printf("dest = %u\n",(unsigned long int) dest);
-        printf("*dest - thread_exit = %u\n", *dest - (long unsigned int) pthread_exit);
-        printf("thread exit = %u, &thread_exit = %u\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
-        printf("stack - bottom = %u\n", (int)dest - (int)stack_bottom);
-        printf("dest size = %u, *dest size = %u\n", sizeof(dest), sizeof(*dest));
+        printf("*dest = %x\n", *dest);
+        printf("dest = %x\n", (unsigned long int) dest);
+        *dest =  &pthread_exit;
+        printf("*dest = %x\n", *dest);
+        printf("dest = %x\n",(unsigned long int) dest);
+        printf("*dest - thread_exit = %x\n", *dest - (long unsigned int) pthread_exit);
+        printf("thread exit = %x, &thread_exit = %x\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
+        printf("stack - bottom = %x\n", (int)dest - (int)stack_bottom);
+        printf("dest size = %x, *dest size = %x\n", sizeof(dest), sizeof(*dest));
         printf("memcpy worked\n");
         // *stack_pointer = (unsigned long int) thread_exit;
         // new_TCB->Environment->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long int)stack_pointer);
