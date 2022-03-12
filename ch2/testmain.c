@@ -7,16 +7,16 @@
 #include <setjmp.h>
 #include <pthread.h>
 
-static void* my_thread(void* my_arg) {
-    printf("Hello\n");
-
+void my_thread(void* my_arg) {
+    printf("Hello World\n");
+    
     // Do something in this thread
 //    if (i_need_to_exit_now) {
 //        pthread_exit(NULL); // Can exit with another value
 //    }
     // Maybe do some more things in this thread
     // Suggestion: do something that takes a long time
-    return NULL; // Can return other values
+     // Can return other values
 }
 
 int main() {

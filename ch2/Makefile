@@ -9,7 +9,7 @@ test_busy_threads: test_busy_threads.o threads.o
 	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
 
 
-test_files=testmain
+test_files=test_busy_threads
 
 # Run the test programs
 check: $(test_files) 

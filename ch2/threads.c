@@ -16,7 +16,7 @@
 #define ALARM_TRIGGERED 3
 #define THREAD_JUMPED 4
 /* Your stack should be this many bytes in size */
-#define THREAD_STACK_SIZE 32768
+#define THREAD_STACK_SIZE 32767
 
 #define MAIN_THREAD 1
 #define SUCCESSFUL_EXECUTION 1
@@ -63,6 +63,9 @@ typedef TCB_ptr thread_t;
 
 static struct thread_control_block *run_queue;
 static struct thread_control_block *last_thread;
+static int thread_counter = MAIN_THREAD;
+
+static void schedule(int signal) __attribute__((unused));
 
 static int linked_thread_init(void) {
 
@@ -105,6 +108,14 @@ int thread_exit (void) {
 //    schedule(THREAD_EXITED);
 }
 
+// static void print_mem(void* addr, int count) {
+//     unsigned char* mem = (unsigned char*) addr;
+//     for(int i = 0; i < count; i++) {
+//         printf("%x ", mem[i]);
+//     }
+//     printf("\n");
+// }
+
 static volatile void thread_wrapper(void) {
     (*run_queue->Entry) (run_queue->Argc, run_queue->Argv);
     thread_exit(); //TODO MAKE THREAD EXIT SEPARATE FROM PTHREADEXIT
@@ -133,15 +144,15 @@ void add_thread_to_queue(thread_t new_TCB) {
 
 void pthread_exit(void *value_ptr)
 {
-    printf("Thread exited\n");
-    // run_queue->TS = TS_EXITED;
-    // free(run_queue->stack_bottom);
+    // printf("Thread exited %d \n", run_queue->thread_ID);
+    run_queue->TS = TS_EXITED;
+    free(run_queue->stack_bottom);
 
-    // run_queue = run_queue->next;
-    // free(last_thread->next);
-    // last_thread->next = run_queue;
-
-    // schedule(THREAD_EXITED);
+    run_queue = run_queue->next;
+    free(last_thread->next);
+    last_thread->next = run_queue;
+    printf("mem cleared\n");
+    schedule(THREAD_EXITED);
 
     /* TODO: Exit the current thread instead of exiting the entire process.
      * Hints:
@@ -165,36 +176,34 @@ int thread_create (pthread_t *thread, const pthread_attr_t *attr,
     new_TCB = (thread_t) malloc(sizeof(TCB));
     if(new_TCB == NULL) { return ERROR_INITIALIZATION; }
     stack_bottom = (char*) calloc(THREAD_STACK_SIZE, 1);
+
+    for(int i = 0; i < THREAD_STACK_SIZE; i++) {
+        stack_bottom[i] = -1;
+    }
+
     stack_pointer = (long *) (stack_grows_down(&first_address))?(THREAD_STACK_SIZE + stack_bottom):stack_bottom;
     
-    printf("Stack_bottom  = %x\n", (long)stack_bottom);
-    printf("Stack_pointer = %x\n", (long)stack_pointer);
-    printf("Adjusted stack_pointer = %x\n", (long)stack_pointer & ((long)-16));
-    printf("stack - bottom = %x\n", (long)stack_pointer - (long)stack_bottom);
-    printf("size of pthread_exit = %d\n", sizeof(&pthread_exit));
-    printf("size of stack_pointer = %x\n", (long)sizeof(stack_pointer));
-    long* dest = THREAD_STACK_SIZE + stack_bottom - 8;
-    printf("dest - bottom = %x\n", (long)dest - (long)stack_bottom);
+    unsigned long* dest = THREAD_STACK_SIZE + stack_bottom - 8;
+
     if (setjmp(new_TCB->Environment) == 0) {
-        // thread_init(new_TCB, stack_bottom);
-        printf("thread exit = %x, &thread_exit = %x\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
-        // *stack_pointer = &thread_exit;
-        printf("*dest = %x\n", *dest);
-        printf("dest = %x\n", (unsigned long int) dest);
-        *dest =  &pthread_exit;
-        printf("*dest = %x\n", *dest);
-        printf("dest = %x\n",(unsigned long int) dest);
-        printf("*dest - thread_exit = %x\n", *dest - (long unsigned int) pthread_exit);
-        printf("thread exit = %x, &thread_exit = %x\n", (unsigned long int)thread_exit, (unsigned long int)&thread_exit);
-        printf("stack - bottom = %x\n", (int)dest - (int)stack_bottom);
-        printf("dest size = %x, *dest size = %x\n", sizeof(dest), sizeof(*dest));
-        printf("memcpy worked\n");
-        // *stack_pointer = (unsigned long int) thread_exit;
-        // new_TCB->Environment->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long int)stack_pointer);
+
+        printf("        dest = %x\n", dest);
+        printf("mangled dest = %x\n", ptr_mangle(dest));
+
+        unsigned long exit_addr = (unsigned long) &pthread_exit;
+
+
+        *(unsigned long*) dest =  (unsigned long)exit_addr;
+
+        // print_mem(dest, 8);
+
         new_TCB->Environment->__jmpbuf[JB_PC] = ptr_mangle((unsigned long int)start_thunk);
         new_TCB->Environment->__jmpbuf[JB_R12] = (unsigned long int) start_routine;
         new_TCB->Environment->__jmpbuf[JB_R13] = (unsigned long int) arg;
-        new_TCB->thread_ID = (int*) thread;
+        new_TCB->Environment->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long) dest);
+
+
+        new_TCB->thread_ID = thread_counter;
         new_TCB->Entry = (void(*)(int, char**))start_routine;
         new_TCB->Argc = NULL;
         new_TCB->Argv = arg;
@@ -207,7 +216,7 @@ int thread_create (pthread_t *thread, const pthread_attr_t *attr,
         return THREAD_JUMPED;
     }
 }
-static void schedule(int signal) __attribute__((unused));
+
 
 static void schedule(int signal)
 {
@@ -223,12 +232,13 @@ static void schedule(int signal)
 
             last_thread = last_thread->next;
             run_queue->TS = TS_RUNNING;
-            printf("TS_RUNNING: Jump to thread_ID %d\n", run_queue->thread_ID);
+            // printf("TS_RUNNING: Jump to thread_ID %d\n", run_queue->thread_ID);
             longjmp(run_queue->Environment, (int) run_queue->thread_ID);
         case TS_EXITED:
             pthread_exit((void *) run_queue->thread_ID);
         case TS_READY:
-            printf("TS_READY: Jump to thread_ID %d\n", run_queue->thread_ID);
+            // printf("TS_READY: Jump to thread_ID %d\n", run_queue->thread_ID);
+            run_queue->TS = TS_RUNNING;
             longjmp(run_queue->Environment, (int) run_queue->thread_ID);
         default:
             perror("ERROR: Thread state could not be defined");
@@ -280,6 +290,8 @@ int pthread_create(
         if(arg != NULL) {
             int Argc = 1;
         }
+        thread_counter++;
+        thread = (pthread_t) thread_counter;
 
         val = thread_create(thread, attr, start_routine, arg);
         if (val == SUCCESSFUL_EXECUTION){
@@ -339,11 +351,11 @@ int pthread_create(
 
 pthread_t pthread_self(void)
 {
-    /* TODO: Return the current thread instead of -1
+    return run_queue->thread_ID;/* TODO: Return the current thread instead of -1
      * Hint: this function can be implemented in one line, by returning
      * a specific variable instead of -1.
      */
-    return -1;
+
 }
 
 /* Don't implement main in this file!
