@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
 
 
 /* You can support more threads. At least support this many. */
@@ -52,9 +54,6 @@ typedef struct thread_control_block {
     enum thread_status TS;
     jmp_buf Environment;
     void *stack_bottom;
-    void (*Entry)(int, char**);
-    int Argc;
-    char **Argv;
     struct thread_control_block *next;
 } TCB;
 
@@ -63,7 +62,8 @@ typedef TCB_ptr thread_t;
 
 static struct thread_control_block *run_queue;
 static struct thread_control_block *last_thread;
-static int thread_counter = MAIN_THREAD;
+static int* thread_counter = (int*) MAIN_THREAD;
+static int tc = MAIN_THREAD;
 
 static void schedule(int signal) __attribute__((unused));
 
@@ -79,7 +79,7 @@ static int linked_thread_init(void) {
         run_queue->next = run_queue;
         run_queue->TS = TS_RUNNING;
         last_thread = run_queue;
-        printf("Main thread created\n");
+        // printf("Main thread created\n");
         return SUCCESSFUL_EXECUTION;
     } 
     // else {
@@ -88,14 +88,14 @@ static int linked_thread_init(void) {
     // }
 }
 
-static int stack_grows_down (void *first_address) {
-    int second_address;
-    return first_address > (void *) &second_address;
-}
+// static int stack_grows_down (void *first_address) {
+//     int second_address;
+//     return first_address > (void *) &second_address;
+// }
 
 int thread_exit (void) {
     printf("thread_exit()\n");
-    thread_t temp;
+    // thread_t temp;
     if(run_queue->thread_ID == MAIN_THREAD) {
         return SHOULDNOTREACHHERE;
     }
@@ -116,25 +116,25 @@ int thread_exit (void) {
 //     printf("\n");
 // }
 
-static volatile void thread_wrapper(void) {
-    (*run_queue->Entry) (run_queue->Argc, run_queue->Argv);
-    thread_exit(); //TODO MAKE THREAD EXIT SEPARATE FROM PTHREADEXIT
-}
+// static volatile void thread_wrapper(void) {
+//     (*run_queue->Entry) (run_queue->Argc, run_queue->Argv);
+//     thread_exit(); //TODO MAKE THREAD EXIT SEPARATE FROM PTHREADEXIT
+// }
 
-void thread_init (volatile TCB *volatile new_TCB, void *stack_pointer) {
-    // printf("Stack_pointer in thread_init = %u\n", (int)stack_pointer);
-    // new_TCB->Environment->__jmpbuf[JB_RSP] = (int) stack_pointer;
-    // new_TCB->Environment->__jmpbuf[JB_RBP] = (int) stack_pointer;
+// void thread_init (volatile TCB *volatile new_TCB, void *stack_pointer) {
+//     // printf("Stack_pointer in thread_init = %u\n", (int)stack_pointer);
+//     // new_TCB->Environment->__jmpbuf[JB_RSP] = (int) stack_pointer;
+//     // new_TCB->Environment->__jmpbuf[JB_RBP] = (int) stack_pointer;
 
-    printf("Thread_wrapper address = %lu, ptr_mangle = %lu\n", 
-        (unsigned long int)thread_wrapper,
-        (long) ptr_mangle((unsigned long int)thread_wrapper));
-    new_TCB->Environment->__jmpbuf[JB_PC] = ptr_mangle((unsigned long int) thread_wrapper);
+//     printf("Thread_wrapper address = %lu, ptr_mangle = %lu\n", 
+//         (unsigned long int)thread_wrapper,
+//         (long) ptr_mangle((unsigned long int)thread_wrapper));
+//     new_TCB->Environment->__jmpbuf[JB_PC] = ptr_mangle((unsigned long int) thread_wrapper);
 
 //    new_TCB->Environment->__jmpbuf[JB_RSP] = (int) stack_pointer;
 //    new_TCB->Environment->__jmpbuf[JB_RBP] = (int) stack_pointer;
 //    new_TCB->Environment->__jmpbuf[JB_PC] = (int) thread_wrapper;
-}
+// }
 
 void add_thread_to_queue(thread_t new_TCB) {
     last_thread->next = new_TCB;
@@ -151,7 +151,7 @@ void pthread_exit(void *value_ptr)
     run_queue = run_queue->next;
     free(last_thread->next);
     last_thread->next = run_queue;
-    printf("mem cleared\n");
+    // printf("mem cleared\n");
     schedule(THREAD_EXITED);
 
     /* TODO: Exit the current thread instead of exiting the entire process.
@@ -163,15 +163,15 @@ void pthread_exit(void *value_ptr)
      * - Update the thread's status to indicate that it has exited
      */
 
-    exit(1);
+    exit(0);
 }
 
 int thread_create (pthread_t *thread, const pthread_attr_t *attr,
         void *(*start_routine) (void *), void *arg) {
     thread_t new_TCB;
     char *stack_bottom;
-    long first_address;
-    long *stack_pointer;
+    // long first_address;
+    // long *stack_pointer;
 
     new_TCB = (thread_t) malloc(sizeof(TCB));
     if(new_TCB == NULL) { return ERROR_INITIALIZATION; }
@@ -181,14 +181,14 @@ int thread_create (pthread_t *thread, const pthread_attr_t *attr,
         stack_bottom[i] = -1;
     }
 
-    stack_pointer = (long *) (stack_grows_down(&first_address))?(THREAD_STACK_SIZE + stack_bottom):stack_bottom;
+    // stack_pointer = (long *) (stack_grows_down(&first_address))?(THREAD_STACK_SIZE + stack_bottom):stack_bottom;
     
-    unsigned long* dest = THREAD_STACK_SIZE + stack_bottom - 8;
+    unsigned long* dest = (unsigned long*) (THREAD_STACK_SIZE + stack_bottom - 8);
 
     if (setjmp(new_TCB->Environment) == 0) {
 
-        printf("        dest = %x\n", dest);
-        printf("mangled dest = %x\n", ptr_mangle(dest));
+        // printf("        dest = %x\n", dest);
+        // printf("mangled dest = %x\n", ptr_mangle(dest));
 
         unsigned long exit_addr = (unsigned long) &pthread_exit;
 
@@ -203,16 +203,14 @@ int thread_create (pthread_t *thread, const pthread_attr_t *attr,
         new_TCB->Environment->__jmpbuf[JB_RSP] = ptr_mangle((unsigned long) dest);
 
 
-        new_TCB->thread_ID = thread_counter;
-        new_TCB->Entry = (void(*)(int, char**))start_routine;
-        new_TCB->Argc = NULL;
-        new_TCB->Argv = arg;
+        new_TCB->thread_ID = tc;
+      
         new_TCB->stack_bottom = stack_bottom;
         new_TCB->TS = TS_READY;
         add_thread_to_queue(new_TCB);
         return SUCCESSFUL_EXECUTION;
     } else {
-        printf("Thread jumped\n");
+        // printf("Thread jumped\n");
         return THREAD_JUMPED;
     }
 }
@@ -234,8 +232,9 @@ static void schedule(int signal)
             run_queue->TS = TS_RUNNING;
             // printf("TS_RUNNING: Jump to thread_ID %d\n", run_queue->thread_ID);
             longjmp(run_queue->Environment, (int) run_queue->thread_ID);
-        case TS_EXITED:
-            pthread_exit((void *) run_queue->thread_ID);
+        case TS_EXITED: ;
+            void *karl = (void*) 1;
+            pthread_exit(karl);
         case TS_READY:
             // printf("TS_READY: Jump to thread_ID %d\n", run_queue->thread_ID);
             run_queue->TS = TS_RUNNING;
@@ -251,17 +250,41 @@ static void schedule(int signal)
      * 3. Switch to the next thread (use longjmp on that thread's jmp_buf)
      */
 }
+/*void alarm_timer(int sig)
+{
+    signal(SIGALRM, SIG_IGN);
+    // printf("Alarm triggered!\n");
+    ualarm(SCHEDULER_INTERVAL_USECS,0);
+    // signal(SIGALRM, alarm_timer);
+    // ualarm(SCHEDULER_INTERVAL_USECS,0);
+    schedule(ALARM_TRIGGERED);
+
+}
 
 static void scheduler_init()
 {
-    /* TODO: do everything that is needed to initialize your scheduler. For example:
-     * - Allocate/initialize global threading data structures
-     * - Create a TCB for the main thread. Note: This is less complicated
-     *   than the TCBs you create for all other threads. In this case, your
-     *   current stack and registers are already exactly what they need to be!
-     *   Just make sure they are correctly referenced in your TCB.
-     * - Set up your timers to call schedule() at a 50 ms interval (SCHEDULER_INTERVAL_USECS)
-     */
+    struct sigaction sact;
+    sigemptyset( &sact.sa_mask );
+    sact.sa_flags = SA_NODEFER;
+    sact.sa_handler = alarm_timer;
+    sigaction( SIGALRM, &sact, NULL );
+    ualarm(SCHEDULER_INTERVAL_USECS,0);
+}*/
+
+void alarm_timer(int sig)
+{
+    signal(SIGALRM, SIG_IGN);
+    alarm(0);
+    signal(SIGALRM, alarm_timer);
+    alarm(SCHEDULER_INTERVAL_USECS);
+    schedule(ALARM_TRIGGERED);
+
+}
+
+static void scheduler_init()
+{
+    signal(SIGALRM, alarm_timer);
+    alarm(SCHEDULER_INTERVAL_USECS);
 }
 
 int pthread_create(
@@ -271,7 +294,7 @@ int pthread_create(
     // Create the timer and handler for the scheduler. Create thread 0.
     static bool is_first_call = true;
     int val;
-    int Argc = 0;
+    // int Argc = 0;
     int value_init = 0;
     if (is_first_call)
     {
@@ -287,11 +310,12 @@ int pthread_create(
     }
 
     if (value_init != THREAD_JUMPED) {
-        if(arg != NULL) {
-            int Argc = 1;
-        }
+        // if(arg != NULL) {
+        //     // int Argc = 1;
+        // }
         thread_counter++;
-        thread = (pthread_t) thread_counter;
+        tc++;
+        thread = (pthread_t*) thread_counter;
 
         val = thread_create(thread, attr, start_routine, arg);
         if (val == SUCCESSFUL_EXECUTION){
@@ -301,7 +325,7 @@ int pthread_create(
             return 0;
         }
     }
-    printf("Main Thread Jumped %d\n", value_init);
+    // printf("Main Thread Jumped %d\n", value_init);
     return 0;
 
     /* TODO: Return 0 on successful thread creation, non-zero for an error.
@@ -351,11 +375,11 @@ int pthread_create(
 
 pthread_t pthread_self(void)
 {
-    return run_queue->thread_ID;/* TODO: Return the current thread instead of -1
-     * Hint: this function can be implemented in one line, by returning
-     * a specific variable instead of -1.
-     */
-
+    //return run_queue->thread_ID;/* TODO: Return the current thread instead of -1
+     // * Hint: this function can be implemented in one line, by returning
+     // * a specific variable instead of -1.
+     // */
+     return -1;
 }
 
 /* Don't implement main in this file!

@@ -8,8 +8,13 @@
 #include <pthread.h>
 
 void my_thread(void* my_arg) {
+    int a = 0;
+    for (int i = 0; i< 10000000; i++) {
+        // printf("%lu\n", (unsigned long) pthread_self());
+        a = a + i;
+    }
     printf("Hello World\n");
-    
+
     // Do something in this thread
 //    if (i_need_to_exit_now) {
 //        pthread_exit(NULL); // Can exit with another value
@@ -41,7 +46,14 @@ int main() {
     //     printf("Jumped\n");
     // }
     // return 0;
-   int val = pthread_create(5, NULL, my_thread, NULL);
+    pthread_t thread;
+   int val = pthread_create(&thread, NULL, my_thread, NULL);
+   // printf("%lu\n", (unsigned long) pthread_self());
+      int a = 0;
+    for (int i = 0; i< 100000; i++) {
+        // printf("%lu\n", (unsigned long) pthread_self());
+        a = a + i;
+    }
 
     // Suggestion: do something that takes a long time, and test that
     // both this and the other long work get to take turns.
