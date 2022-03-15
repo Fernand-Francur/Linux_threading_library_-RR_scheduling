@@ -26,8 +26,7 @@ void *count(void *arg) {
 	int i;
 	for (i = 0; i < c; i++) {
 		if ((i % 100000) == 0) {
-			// printf("id: 0x%lx counted to %d of %ld\n",
-			       // pthread_self(), i, c);
+			 printf("id: 0x%lx counted to %d of %ld\n", pthread_self(), i, c);
 		}
 	}
 	return NULL;

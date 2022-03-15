@@ -375,11 +375,11 @@ int pthread_create(
 
 pthread_t pthread_self(void)
 {
-    //return run_queue->thread_ID;/* TODO: Return the current thread instead of -1
+  return run_queue->thread_ID;/* TODO: Return the current thread instead of -1
      // * Hint: this function can be implemented in one line, by returning
      // * a specific variable instead of -1.
      // */
-     return -1;
+  //   return -1;
 }
 
 /* Don't implement main in this file!
