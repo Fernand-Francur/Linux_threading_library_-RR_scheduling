@@ -18,6 +18,7 @@
 #define THREAD_EXITED 2
 #define ALARM_TRIGGERED 3
 #define THREAD_JUMPED 4
+#define THREAD_BLOCKED 13
 /* Your stack should be this many bytes in size */
 #define THREAD_STACK_SIZE 32767
 
@@ -62,6 +63,7 @@ typedef struct thread_control_block {
 typedef struct blocked_threads {
   pthread_mutex_t *mutex_ID;
   int* blocked_thread_list;
+  bool is_used;
   struct blocked_threads *next;
 } BT;
 
@@ -196,8 +198,18 @@ static void schedule(int signal)
 {
     switch(run_queue->TS) {
         case TS_BLOCKED: ;
-	  
-      
+	  if (signal == THREAD_BLOCKED) {
+	    int val = setjmp(run_queue->Environment);
+            if (val != 0) {
+	      break;
+	    }
+	  } 
+	  while (run_queue->TS != TS_READY) {
+	    run_queue = run_queue->next;
+	    last_thread = last_thread->next;
+	  }
+	  run_queue->TS = TS_RUNNING;
+	  longjmp(run_queue->Environment, (int) run_queue->thread_ID);
         case TS_RUNNING: ;
 
             int val = setjmp(run_queue->Environment);
@@ -363,11 +375,23 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
 
 int pthread_mutex_lock(pthread_mutex_t *mutex)
 {
+  BT *tmp;
+  tmp = blocked_first;
+  while (tmp->mutex_ID != mutex) {
+    tmp = tmp->next;
+  }
+  if (tmp->is_used == false) {
+    tmp->is_used = true;
+  } else {
+    run_queue->TS = TS_BLOCKED;
+    schedule(THREAD_BLOCKED);
+  }
     return 0;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
+  
     return 0;
 }
 
@@ -380,6 +404,7 @@ int pthread_mutex_init(
   if (tmp == NULL) {
     BT *mutex_struct = (BT *) malloc(sizeof(BT));
     mutex_struct->mutex_ID = mutex;
+    mutex_struct->is_used = false;
     mutex_struct->blocked_thread_list = (int *) calloc(MAX_MUTBAR,4);
     blocked_first = mutex_struct;
   } else {
@@ -388,6 +413,7 @@ int pthread_mutex_init(
   }
   BT *mutex_struct = (BT *) malloc(sizeof(BT));
   mutex_struct->mutex_ID = mutex;
+  mutex_struct->is_used = false;
   mutex_struct->blocked_thread_list = (int *) calloc(MAX_MUTBAR,4);
   tmp->next = mutex_struct;
   };
