@@ -398,12 +398,43 @@ int pthread_mutex_destroy(
     pthread_mutex_t *mutex)
 {
   BT *tmp;
+  BT *prev;
+  prev = blocked_first;
   tmp = blocked_first;
   while (tmp->mutex_ID != mutex) {
     tmp = tmp->next;
+    if (tmp == NULL) {
+      perror("ERROR: No such mutex found");
+      return -1;
+    }
+  }
+  if (tmp->next == NULL) {
+    // No action necessary
+  } else if (tmp == blocked_first) {
+    blocked_first = tmp->next;
+    
+  } else {
+    while (prev->next != tmp) {
+      prev = prev->next;
+    }
+    prev->next = tmp->next;
   }
   
-    return 0;
+  for (int i = 0; i < MAX_MUTBAR; i++) {
+    if (tmp->blocked_thread_list[i] != 0) {
+      for (int j = 0; j < MAX_MUTBAR; j++) {
+	if (unblock_array[j] == 0) {
+	  unblock_array[j] = tmp->blocked_thread_list[i];
+	  tmp->blocked_thread_list[i] = 0;
+	  break;
+	}
+      }
+    }
+  }
+  free(tmp->blocked_thread_list);
+  free(tmp);
+  
+  return 0;
 }
 
 

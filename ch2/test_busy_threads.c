@@ -56,8 +56,13 @@ int main(int argc, char **argv) {
 		pthread_create(&threads[i], NULL, count,
 		               (void *)(intptr_t)((i + 1) * COUNTER_FACTOR));
 	}
-	pthread_mutex_t *restrict mutex;
-	pthread_mutex_init(mutex,NULL);
+	pthread_mutex_t *restrict mutex1;
+	pthread_mutex_t *restrict mutex2;
+	pthread_mutex_t *restrict mutex3;
+	pthread_mutex_init(mutex1,NULL);
+	pthread_mutex_init(mutex2,NULL);
+	pthread_mutex_destroy(mutex2);
+	pthread_mutex_destroy(mutex1);
 #if HAVE_PTHREAD_JOIN == 0
 	/* Wait for longer than the most busy of the other threads */
 	count((void *)(intptr_t)((i + 1) * COUNTER_FACTOR));
