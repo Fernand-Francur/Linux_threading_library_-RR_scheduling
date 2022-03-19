@@ -26,7 +26,7 @@ void *count(void *arg) {
 	int i;
 	for (i = 0; i < c; i++) {
 		if ((i % 100000) == 0) {
-			 // printf("id: 0x%lx counted to %d of %ld\n", pthread_self(), i, c);
+		  //printf("id: %lx counted to %d of %ld\n", pthread_self(), i, c);
 		}
 	}
 	return NULL;
@@ -48,11 +48,16 @@ void *count(void *arg) {
 int main(int argc, char **argv) {
 	pthread_t threads[THREAD_CNT];
 	int i;
+       
+	
+
+	
 	for(i = 0; i < THREAD_CNT; i++) {
 		pthread_create(&threads[i], NULL, count,
 		               (void *)(intptr_t)((i + 1) * COUNTER_FACTOR));
 	}
-
+	pthread_mutex_t *restrict mutex;
+	pthread_mutex_init(mutex,NULL);
 #if HAVE_PTHREAD_JOIN == 0
 	/* Wait for longer than the most busy of the other threads */
 	count((void *)(intptr_t)((i + 1) * COUNTER_FACTOR));
