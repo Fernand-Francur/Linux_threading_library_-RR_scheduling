@@ -108,35 +108,7 @@ int thread_exit (void) {
 //    schedule(THREAD_EXITED);
 }
 
-// static void print_mem(void* addr, int count) {
-//     unsigned char* mem = (unsigned char*) addr;
-//     for(int i = 0; i < count; i++) {
-//         printf("%x ", mem[i]);
-//     }
-//     printf("\n");
-// }
-
-// static volatile void thread_wrapper(void) {
-//     (*run_queue->Entry) (run_queue->Argc, run_queue->Argv);
-//     thread_exit(); //TODO MAKE THREAD EXIT SEPARATE FROM PTHREADEXIT
-// }
-
-// void thread_init (volatile TCB *volatile new_TCB, void *stack_pointer) {
-//     // printf("Stack_pointer in thread_init = %u\n", (int)stack_pointer);
-//     // new_TCB->Environment->__jmpbuf[JB_RSP] = (int) stack_pointer;
-//     // new_TCB->Environment->__jmpbuf[JB_RBP] = (int) stack_pointer;
-
-//     printf("Thread_wrapper address = %lu, ptr_mangle = %lu\n", 
-//         (unsigned long int)thread_wrapper,
-//         (long) ptr_mangle((unsigned long int)thread_wrapper));
-//     new_TCB->Environment->__jmpbuf[JB_PC] = ptr_mangle((unsigned long int) thread_wrapper);
-
-//    new_TCB->Environment->__jmpbuf[JB_RSP] = (int) stack_pointer;
-//    new_TCB->Environment->__jmpbuf[JB_RBP] = (int) stack_pointer;
-//    new_TCB->Environment->__jmpbuf[JB_PC] = (int) thread_wrapper;
-// }
-
-void add_thread_to_queue(thread_t new_TCB) {
+    void add_thread_to_queue(thread_t new_TCB) {
     last_thread->next = new_TCB;
     new_TCB->next = run_queue;
     last_thread = new_TCB;
@@ -153,15 +125,6 @@ void pthread_exit(void *value_ptr)
     last_thread->next = run_queue;
     // printf("mem cleared\n");
     schedule(THREAD_EXITED);
-
-    /* TODO: Exit the current thread instead of exiting the entire process.
-     * Hints:
-     * - Release all resources for the current thread. CAREFUL though.
-     *   If you free() the currently-in-use stack then do something like
-     *   call a function or add/remove variables from the stack, bad things
-     *   can happen.
-     * - Update the thread's status to indicate that it has exited
-     */
 
     exit(0);
 }
@@ -242,17 +205,11 @@ static void schedule(int signal)
         default:
             perror("ERROR: Thread state could not be defined");
     }
-
-    /* TODO: implement your round-robin scheduler
-     * 1. Use setjmp() to update your currently-active thread's jmp_buf
-     *    You DON'T need to manually modify registers here.
-     * 2. Determine which is the next thread that should run
-     * 3. Switch to the next thread (use longjmp on that thread's jmp_buf)
-     */
 }
-/*void alarm_timer(int sig)
+void alarm_timer(int sig)
 {
-    signal(SIGALRM, SIG_IGN);
+  printf("Alarm_Triggered\n");
+  // signal(SIGALRM, SIG_IGN);
     // printf("Alarm triggered!\n");
     ualarm(SCHEDULER_INTERVAL_USECS,0);
     // signal(SIGALRM, alarm_timer);
@@ -269,9 +226,9 @@ static void scheduler_init()
     sact.sa_handler = alarm_timer;
     sigaction( SIGALRM, &sact, NULL );
     ualarm(SCHEDULER_INTERVAL_USECS,0);
-}*/
+}
 
-void alarm_timer(int sig)
+/*void alarm_timer(int sig)
 {
     signal(SIGALRM, SIG_IGN);
     alarm(0);
@@ -285,7 +242,7 @@ static void scheduler_init()
 {
     signal(SIGALRM, alarm_timer);
     alarm(SCHEDULER_INTERVAL_USECS);
-}
+    }*/
 
 int pthread_create(
         pthread_t *thread, const pthread_attr_t *attr,
