@@ -8,8 +8,17 @@ test_busy_threads.o: test_busy_threads.c ec440threads.h
 test_busy_threads: test_busy_threads.o threads.o
 	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
 
+lock_test_1.o: lock_test_1.c ec440threads.h
 
-test_files=test_busy_threads
+lock_test_1: lock_test_1.o threads.o
+	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
+
+barrier_test_1.o: barrier_test_1.c ec440threads.h
+
+barrier_test_1: barrier_test_1.o threads.o
+	$(CC) $(LDFLAGS) $+ $(LOADLIBES) $(LDLIBS) -o $@
+
+test_files=test_busy_threads lock_test_1 barrier_test_1
 
 # Run the test programs
 check: $(test_files) 
