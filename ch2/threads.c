@@ -445,7 +445,28 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
   while (tmp->barrier_ID != barrier) {
     tmp = tmp->next;
   }
-  // if (
+  if (tmp->count != tmp->thread_num) {
+    printf("Thread %d Blocked\n", run_queue->thread_ID);
+    tmp->blocked_thread_list[tmp->thread_num] = run_queue->thread_ID;
+    run_queue->TS = TS_BLOCKED;
+    tmp->thread_num = tmp->thread_num + 1;
+    unlock();
+    schedule(THREAD_BLOCKED);
+  } else {
+    struct thread_control_block *tmp_thread;
+    tmp_thread = run_queue->next;
+    while(tmp_thread != run_queue) {
+      for (int i = 0; i < tmp->count; i++) {
+	if (tmp->blocked_thread_list[i] == tmp_thread->thread_ID) {
+	  tmp_thread->TS = TS_READY;
+	  break;
+	}
+      }
+      tmp_thread = tmp_thread->next;
+    }
+    tmp->thread_num = 0;
+  }
+  unlock();
     return 0;
 }
 
