@@ -387,6 +387,7 @@ int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
                             unsigned count)
 {
   BB *tmp;
+  lock();
   tmp = first_barrier;
   if (tmp == NULL) {
     BB *barrier_struct = (BB *) malloc(sizeof(BB));
@@ -402,9 +403,11 @@ int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
     BB *barrier_struct = (BB *) malloc(sizeof(BB));
     barrier_struct->barrier_ID = barrier;
     barrier_struct->count = count;
+    barrier_struct->thread_num = 0;
     barrier_struct->blocked_thread_list = (int *) calloc(count, 4);
     tmp->next = barrier_struct;
   };
+  unlock();
     return 0;
 }
 
@@ -412,12 +415,14 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier)
 {
   BB *tmp;
   BB *prev;
+  lock();
   prev = first_barrier;
   tmp = first_barrier;
   while (tmp->barrier_ID != barrier) {
     tmp = tmp->next;
     if (tmp == NULL) {
       perror("ERROR: No such barrier found");
+      unlock();
       return -1;
     }
     if (tmp->next == NULL) {
@@ -431,9 +436,10 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier)
       prev->next = tmp->next;
     }
     free(tmp->blocked_thread_list);
+    free(tmp->barrier_ID);
     free(tmp);
   }
-  
+  unlock();
     return 0;
 }
 
@@ -459,6 +465,7 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
     while(tmp_thread != run_queue) {
       for (int i = 0; i < tmp->count; i++) {
 	if (tmp->blocked_thread_list[i] == tmp_thread->thread_ID) {
+	  tmp->blocked_thread_list[i] = 0;
 	  tmp_thread->TS = TS_READY;
 	  break;
 	}

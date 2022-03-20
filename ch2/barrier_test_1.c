@@ -14,7 +14,7 @@ Once both threads hit the barrier, it should reset, and both threads can keep co
 */
 
 /* How many threads (aside from main) to create */
-#define THREAD_CNT 1
+#define THREAD_CNT 5
 
 /* pthread_join is not implemented in homework 2 */
 #define HAVE_PTHREAD_JOIN 0
@@ -60,7 +60,7 @@ void *count(void *arg) {
 
 int main(int argc, char **argv) {
   pthread_t threads[THREAD_CNT];
-    pthread_barrier_init(&barrier, NULL, 2); // Init lock
+    pthread_barrier_init(&barrier, NULL, 3); // Init lock
   int i;
   for(i = 0; i < THREAD_CNT; i++) {
     pthread_create(&threads[i], NULL, count,
