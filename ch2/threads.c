@@ -473,9 +473,9 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
       tmp_thread = tmp_thread->next;
     }
     tmp->thread_num = 0;
+    unlock();
     return PTHREAD_BARRIER_SERIAL_THREAD;
   }
-  unlock();
     return 0;
 }
 
