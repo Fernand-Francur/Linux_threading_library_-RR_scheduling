@@ -217,9 +217,12 @@ static void schedule(int signal)
                 break;
             }
             run_queue->TS = TS_READY;
-            run_queue = run_queue->next;
-
-            last_thread = last_thread->next;
+	    run_queue = run_queue->next;
+	    last_thread = last_thread->next;
+	    while (run_queue->TS != TS_READY) {
+	      run_queue = run_queue->next;
+	      last_thread = last_thread->next;
+	    }
             run_queue->TS = TS_RUNNING;
             // printf("TS_RUNNING: Jump to thread_ID %d\n", run_queue->thread_ID);
             longjmp(run_queue->Environment, (int) run_queue->thread_ID);
@@ -381,8 +384,16 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
     tmp = tmp->next;
   }
   if (tmp->is_used == false) {
+    printf("Locked\n");
     tmp->is_used = true;
   } else {
+    printf("Thread %d Blocked\n", run_queue->thread_ID);
+    for (int i=0; i < MAX_MUTBAR; i++) {
+      if (tmp->blocked_thread_list[i] != 0) {
+	tmp->blocked_thread_list[i] = run_queue->thread_ID;
+	break;
+      }
+    }
     run_queue->TS = TS_BLOCKED;
     schedule(THREAD_BLOCKED);
   }
@@ -391,7 +402,24 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
-  
+  BT *tmp;
+  printf("Unlocked\n");
+  tmp = blocked_first;
+  while (tmp->mutex_ID != mutex) {
+    tmp = tmp->next;
+  }
+  tmp->is_used = false;
+  struct thread_control_block *tmp_thread;
+  tmp_thread = run_queue->next;
+  while(tmp_thread != run_queue) {
+    for (int i = 0; i < MAX_MUTBAR; i++) {
+      if (tmp->blocked_thread_list[i] == tmp_thread->thread_ID) {
+	tmp_thread->TS = TS_READY;
+	break;
+      }
+    }
+    tmp_thread = tmp_thread->next;
+  }
     return 0;
 }
 
