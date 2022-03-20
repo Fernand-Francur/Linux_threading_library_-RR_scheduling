@@ -67,10 +67,19 @@ typedef struct blocked_threads {
   struct blocked_threads *next;
 } BT;
 
+typedef struct barrier_blocked {
+  pthread_barrier_t *barrier_ID;
+  int* blocked_thread_list;
+  int count;
+  int thread_num;
+  struct barrier_blocked *next;
+} BB;
+
 typedef struct thread_control_block *TCB_ptr;
 typedef TCB_ptr thread_t;
 
 static struct blocked_threads *blocked_first;
+static struct barrier_blocked *first_barrier;
 static struct thread_control_block *run_queue;
 static struct thread_control_block *last_thread;
 static int* thread_counter = (int*) MAIN_THREAD;
@@ -377,16 +386,66 @@ int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
                             const pthread_barrierattr_t *restrict attr,
                             unsigned count)
 {
+  BB *tmp;
+  tmp = first_barrier;
+  if (tmp == NULL) {
+    BB *barrier_struct = (BB *) malloc(sizeof(BB));
+    barrier_struct->barrier_ID = barrier;
+    barrier_struct->count = count;
+    barrier_struct->thread_num = 0;
+    barrier_struct->blocked_thread_list = (int *) calloc(count, 4);
+    first_barrier = barrier_struct;
+  } else {
+    while (tmp->next != NULL) {
+      tmp = tmp->next;
+    }
+    BB *barrier_struct = (BB *) malloc(sizeof(BB));
+    barrier_struct->barrier_ID = barrier;
+    barrier_struct->count = count;
+    barrier_struct->blocked_thread_list = (int *) calloc(count, 4);
+    tmp->next = barrier_struct;
+  };
     return 0;
 }
 
 int pthread_barrier_destroy(pthread_barrier_t *barrier)
 {
+  BB *tmp;
+  BB *prev;
+  prev = first_barrier;
+  tmp = first_barrier;
+  while (tmp->barrier_ID != barrier) {
+    tmp = tmp->next;
+    if (tmp == NULL) {
+      perror("ERROR: No such barrier found");
+      return -1;
+    }
+    if (tmp->next == NULL) {
+      // No action necessary
+    } else if (tmp == first_barrier) {
+      first_barrier = tmp->next;
+    } else {
+      while (prev->next != tmp) {
+	prev = prev->next;
+      }
+      prev->next = tmp->next;
+    }
+    free(tmp->blocked_thread_list);
+    free(tmp);
+  }
+  
     return 0;
 }
 
 int pthread_barrier_wait(pthread_barrier_t *barrier)
 {
+  BB *tmp;
+  lock();
+  tmp = first_barrier;
+  while (tmp->barrier_ID != barrier) {
+    tmp = tmp->next;
+  }
+  // if (
     return 0;
 }
 
