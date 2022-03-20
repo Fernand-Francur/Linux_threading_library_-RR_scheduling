@@ -76,7 +76,7 @@ static struct thread_control_block *last_thread;
 static int* thread_counter = (int*) MAIN_THREAD;
 static int tc = MAIN_THREAD;
 static int* unblock_array = NULL;
-
+static bool ignore = false;
 static void schedule(int signal) __attribute__((unused));
 
 static int linked_thread_init(void) {
@@ -239,6 +239,7 @@ static void schedule(int signal)
 }
 void alarm_timer(int sig)
 {
+  if (ignore == false) {
   printf("Alarm_Triggered\n");
   // signal(SIGALRM, SIG_IGN);
     // printf("Alarm triggered!\n");
@@ -246,19 +247,32 @@ void alarm_timer(int sig)
     // signal(SIGALRM, alarm_timer);
     // ualarm(SCHEDULER_INTERVAL_USECS,0);
     schedule(ALARM_TRIGGERED);
+  }
 
 }
 
+static struct sigaction sact;
+static sigset_t blocked_signals;
+
 static void scheduler_init()
 {
-    struct sigaction sact;
+  // struct sigaction sact;
     sigemptyset( &sact.sa_mask );
     sact.sa_flags = SA_NODEFER;
     sact.sa_handler = alarm_timer;
+    sigaddset(&blocked_signals, SIGALRM);
     sigaction( SIGALRM, &sact, NULL );
     ualarm(SCHEDULER_INTERVAL_USECS,0);
 }
 
+static void lock() {
+  sigprocmask(SIG_BLOCK, &blocked_signals, &sact.sa_mask);
+}
+
+
+static void unlock() {
+		sigprocmask(SIG_SETMASK, &sact.sa_mask, NULL);
+}
 /*void alarm_timer(int sig)
 {
     signal(SIGALRM, SIG_IGN);
@@ -379,6 +393,7 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
 int pthread_mutex_lock(pthread_mutex_t *mutex)
 {
   BT *tmp;
+  lock();
   tmp = blocked_first;
   while (tmp->mutex_ID != mutex) {
     tmp = tmp->next;
@@ -389,20 +404,23 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
   } else {
     printf("Thread %d Blocked\n", run_queue->thread_ID);
     for (int i=0; i < MAX_MUTBAR; i++) {
-      if (tmp->blocked_thread_list[i] != 0) {
+      if (tmp->blocked_thread_list[i] == 0) {
 	tmp->blocked_thread_list[i] = run_queue->thread_ID;
 	break;
       }
     }
     run_queue->TS = TS_BLOCKED;
+    unlock();
     schedule(THREAD_BLOCKED);
   }
+  unlock();
     return 0;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
   BT *tmp;
+  lock();
   printf("Unlocked\n");
   tmp = blocked_first;
   while (tmp->mutex_ID != mutex) {
@@ -420,6 +438,7 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
     }
     tmp_thread = tmp_thread->next;
   }
+  unlock();
     return 0;
 }
 
