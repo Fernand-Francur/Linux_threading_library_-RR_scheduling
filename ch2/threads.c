@@ -440,10 +440,16 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier)
       }
       prev->next = tmp->next;
     }
-    
+    if (tmp == first_barrier) {
+      free(tmp->blocked_thread_list);
+      
+      free(tmp);// No action necessary
+      first_barrier = NULL;
+    } else {
     free(tmp->blocked_thread_list);
     //free(tmp->barrier_ID);
     free(tmp);
+    }
   
   unlock();
     return 0;
