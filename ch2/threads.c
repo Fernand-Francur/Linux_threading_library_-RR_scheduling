@@ -425,6 +425,7 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier)
       unlock();
       return -1;
     }
+  }
     if (tmp->next == NULL) {
       // No action necessary
     } else if (tmp == first_barrier) {
@@ -435,10 +436,11 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier)
       }
       prev->next = tmp->next;
     }
+    
     free(tmp->blocked_thread_list);
-    free(tmp->barrier_ID);
+    //free(tmp->barrier_ID);
     free(tmp);
-  }
+  
   unlock();
     return 0;
 }

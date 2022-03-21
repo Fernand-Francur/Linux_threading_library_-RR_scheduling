@@ -75,12 +75,14 @@ int main(int argc, char **argv) {
     // Destroy lock
     pthread_barrier_destroy(&barrier);
     printf("Barrier Destroyed\n");
+    
     pthread_barrier_init(&barrier, NULL, 2);
     printf("Barrier Created\n");
 
     pthread_create(&threads[i], NULL, count,
 		   (void *)(intptr_t)((i + 1) * COUNTER_FACTOR));
     count((void *)(intptr_t)((i + 2) * COUNTER_FACTOR));
+
     pthread_barrier_destroy(&barrier);
     printf("Barrier Destroyed\n");
 
