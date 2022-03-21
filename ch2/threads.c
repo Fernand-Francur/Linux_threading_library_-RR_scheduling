@@ -390,7 +390,7 @@ int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
   lock();
   tmp = first_barrier;
   if (tmp == NULL) {
-    BB *barrier_struct = (BB *) malloc(sizeof(BB));
+    BB *barrier_struct = (BB *) calloc(1,sizeof(BB));
     barrier_struct->barrier_ID = barrier;
     barrier_struct->count = count;
     barrier_struct->thread_num = 0;
@@ -400,7 +400,7 @@ int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
     while (tmp->next != NULL) {
       tmp = tmp->next;
     }
-    BB *barrier_struct = (BB *) malloc(sizeof(BB));
+    BB *barrier_struct = (BB *) calloc(1,sizeof(BB));
     barrier_struct->barrier_ID = barrier;
     barrier_struct->count = count;
     barrier_struct->thread_num = 0;
@@ -426,10 +426,12 @@ int pthread_barrier_destroy(pthread_barrier_t *barrier)
       return -1;
     }
   }
-    if (tmp->next == NULL) {
-      // No action necessary
-    } else if (tmp == first_barrier) {
-      first_barrier = tmp->next;
+    if (tmp == first_barrier) {
+      if (tmp->next == NULL) {
+	// No action necessary
+      } else {
+	first_barrier = tmp->next;
+      }
     } else {
       while (prev->next != tmp) {
 	prev = prev->next;
