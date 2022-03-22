@@ -382,11 +382,24 @@ int pthread_create(
     return -1;
 }
 
+typedef struct BBpointer{
+  BB *ptr;
+} BBptr;
+
 int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
                             const pthread_barrierattr_t *restrict attr,
                             unsigned count)
 {
   
+  BBptr * tmp = (BBptr *) barrier;
+  /*printf("sz li %d, sz ptr %d\n", sizeof(long int), sizeof(char *));
+
+  long int a;
+  char *p;
+
+  a = (long int)p;
+  p = (char *)a;
+  */
   lock();
   // tmp = first_barrier;
  
@@ -395,8 +408,9 @@ int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
   barrier_struct->blocked_thread_list = (int *) calloc(count, 4);
   barrier_struct->thread_num = 0;
   barrier_struct->count = count;
-  barrier = calloc(1,sizeof(BB));
-  barrier = (pthread_barrier_t *) &barrier_struct;
+  tmp->ptr = barrier_struct;
+  // barrier = calloc(1,sizeof(BB));
+  // *barrier = (( pthread_barrier_t) barrier_struct);
  
   /*
   if (tmp == NULL || tmp == 0) {
@@ -426,9 +440,9 @@ int pthread_barrier_init(   pthread_barrier_t *restrict barrier,
 int pthread_barrier_destroy(pthread_barrier_t *barrier)
 {
   lock();
-  BB *barrier_struct = (BB *) barrier; 
-  free(barrier_struct->blocked_thread_list);
-  free(barrier_struct);
+  BBptr * tmp = (BBptr *) barrier; 
+  free(tmp->ptr->blocked_thread_list);
+  free(tmp->ptr);
   
   /*BB *tmp;
   BB *prev;
@@ -474,14 +488,14 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
 {
 
   lock();
-  BB *barrier_struct = (BB *) barrier;
+  BBptr * tmp = (BBptr *) barrier;
+  //BB *barrier_struct = (BB *) barrier;
   
-  barrier_struct->thread_num = barrier_struct->thread_num + 1;
-  if (barrier_struct->count != barrier_struct->thread_num) {
+  tmp->ptr->thread_num = tmp->ptr->thread_num + 1;
+  if (tmp->ptr->count != tmp->ptr->thread_num) {
     printf("Thread %d Blocked\n", run_queue->thread_ID);
-    barrier_struct->blocked_thread_list[barrier_struct->thread_num-1] = run_queue->thread_ID;
+    tmp->ptr->blocked_thread_list[tmp->ptr->thread_num-1] = run_queue->thread_ID;
     run_queue->TS = TS_BLOCKED;
-    barrier = (pthread_barrier_t *) &barrier_struct;
     unlock();
     schedule(THREAD_BLOCKED);
   } else {
@@ -489,17 +503,17 @@ int pthread_barrier_wait(pthread_barrier_t *barrier)
     struct thread_control_block *tmp_thread;
     tmp_thread = run_queue->next;
     while(tmp_thread != run_queue) {
-      for (int i = 0; i < barrier_struct->count; i++) {
-	if (barrier_struct->blocked_thread_list[i] == tmp_thread->thread_ID) {
-	  barrier_struct->blocked_thread_list[i] = 0;
+      for (int i = 0; i < tmp->ptr->count; i++) {
+	if (tmp->ptr->blocked_thread_list[i] == tmp_thread->thread_ID) {
+	  tmp->ptr->blocked_thread_list[i] = 0;
 	  tmp_thread->TS = TS_READY;
 	  break;
 	}
       }
       tmp_thread = tmp_thread->next;
     }
-    barrier_struct->thread_num = 0;
-    barrier = (pthread_barrier_t *) &barrier_struct;
+    tmp->ptr->thread_num = 0;
+    //barrier = (pthread_barrier_t *) &barrier_struct;
     unlock();
     return PTHREAD_BARRIER_SERIAL_THREAD;
     }
